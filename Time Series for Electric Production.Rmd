@@ -1,0 +1,286 @@
+---
+title: "PSTAT174 Final Report-Time Series for Electric Production"
+author: "Olivia Dong"
+
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(ggfortify)
+
+library(forecast)
+library(qpcR)
+library(MASS)
+```
+
+## Abstract
+
+The Industrial Production Index is an economic indicator that measures real output for all facilities located in the United States manufacturing, mining, and electric, and gas utilities (excluding those in U.S. territories). The goal for this project is to forecast the future data of industrial production (IP) index of electric and gas utility for the year of 2009-2010 by appropriately modeling the time series data of electric and gas utility industrial production (IP) index from 1985 to 2008. 
+
+This report includes the process of time series analysis which includes data transformation with Boxcox and log transformation, model identification with acf and pacf plot, diagnostic checking with the analysis of residuals and forecast. The plot of original data displays evident periodic pattern. Therefore, SARIMA model is used to fit this electric production data set. Let the Y_t be the training data. ln(Y_t) follows $SARIMA (2,1,2)(2,1,1)_{12}$ model:$(1-0.2440B^2)(1+0.1773B^{24}) (1-B)(1-B^{12})ln(Y_t)=(1-0.3960B -0.5058B^2)(1-0.7301B^{12})Z_t$. The predicted data are close to the real(testing) data line, which indicates that the model we choose fits well to the original data, but with little defect for the predicted confidence interval. 
+
+
+## Introduction
+Since the Industrial Production Index measures the industrial production, it could be helpful and meaningful to analyze the trend and pattern of production index. I choose the section of electric and gas utilities because of the increasing global focus of these resources. Also, the change in the production index is also an economic indicator of the development in industrial production. The prediction might be useful for investment. The original data set consists of 293 industrial production index of electric and gas utilities in the United States, from the years 1985-2010, with frequency being monthly production output. The data plot displays an apparent positive trend and seasonality. Our goal for this project is to find an appropriate time series model to fit the data set and use the model fitted to forecast the future data for the year of 2009-2010 with industrial production (IP) index of electric and gas from 1985 to 2008 using R. The source of data set could be accessed here: https://fred.stlouisfed.org/series/IPG2211A2N. 
+
+This report includes the process of time series analysis which includes data transformation with Boxcox and log transformation, model identification with acf and pacf plot, diagnostic checking with the analysis of residuals and forecast. The original data set is divided into two data sets: one for training and one for testing. The plot of original data displays evident periodic pattern. Therefore, SARIMA model is used to fit this electric production data set. Let the Y_t be the traning data. ln(Y_t) follows $SARIMA (2,1,2)(2,1,1)_{12}$ model:$(1-0.2440B^2)(1+0.1773B^{24}) (1-B)(1-B^{12})ln(Y_t)=(1-0.3960B -0.5058B^2)(1-0.7301B^{12})Z_t$. This model is eventually used to forecast. The 12 points of predicted data are close to the real(testing) data line and keeps the original periodic pattern, which indicates that the model we choose fits well to the original data. However, in the diagnostic part, the residuals do not pass the Shapiro-Wilk test, which indicates a non-normality of residuals of this model. The predicted confidence interval is relatively narrow, and part of the testing data line almost overlaps with the lower bound. Conclusively, The model we choose to fit the data and to forecast performs well overall. The goal is achieved.
+
+
+## Analysis
+```{r, echo=FALSE}
+# read in data
+electric.data <- read.csv('Electric_Production.csv')
+```
+```{r, echo=FALSE}
+
+electric <- ts(electric.data[1:293,2],start=c(1985,1),frequency=12)
+# visualize time series data
+plot.ts(electric,main="Plot of Original Data")
+fit1 <- lm(electric ~ as.numeric(1:length(electric))); abline(fit1, col="red") # add trend line
+abline(h=mean(electric), col="blue") # add mean line
+```
+
+First, with the time series plot of the original data, we could notice that there is a positive trend and seasonality. Also there is unstable mean and variance. Then, the data is divided to prepare for modeling and forecast. 
+
+```{r, echo=FALSE}
+electric.train<-electric[c(1:280)] # training data set
+electric.test <-electric[c(281:293)] # testing data set
+```
+```{r,fig.height=8,fig.width=5, echo=FALSE}
+par(mfrow=c(3,1))
+plot.ts(electric.train, main="Plot of Training Data") # plot training data
+
+fit <- lm(electric.train ~ as.numeric(1:length(electric.train))); abline(fit, col="red") 
+abline(h=mean(electric.train), col="blue")
+hist(electric.train, col="light blue", xlab="", main="histogram: electric.train") # histogram plot
+
+acf(electric.train,lag.max=40, main="ACF of the Electric Data") # acf plot
+```
+
+I divide the original data set into two data sets: one for training with 280 data points and one for test with 12 data points. The training data set is used for model building. By visualizing the training data with the its time series plot, we could notice a positive trend and seasonality. There exists instability in variance. There is no apparent skewness in the histogram. However, acfs are large and displays a periodic decay. Therefore, transformation is need to stablize the variance; differencing is required to remove seasonality and trend to make data stationary.
+```{r, echo=FALSE}
+
+bcTransform <- boxcox(electric.train~ as.numeric(1:length(electric.train))) # plot the graph for lambda
+lambda=bcTransform$x[which(bcTransform$y == max(bcTransform$y))] # gives lambda value
+
+electric.bc = (1/lambda)*(electric.train^lambda-1) # use bctransform
+```
+
+BcTransform command gives $\lambda=0.303$. $\lambda=0$is also included in the confidence interval. Try both.
+
+```{r,fig.height=6,fig.width=10, echo=FALSE}
+par(mfrow=c(2,2))
+plot.ts(electric.bc,main="Bc transformed data") 
+hist(electric.bc, col="light blue", xlab="", main="histogram: Boxcox transformed electric data")
+
+electric.log =log(electric.train) # gives log transformed data
+plot.ts(electric.log, main="log transformed data")
+hist(electric.log, col="light blue", xlab="", main="histogram: log transformed electric data")
+```
+
+Comparing the time series plot of the bc transformed data with log transformed data, we could notice that the log transformed data gives a slightly more stable variance. Also, the histograms looks more normal. Therefore, choose the log transformation.
+```{r, echo=FALSE,fig.height=5,fig.width=5,fig.align='left'}
+y <- ts(as.ts(electric.log), frequency = 12)
+decomp <- decompose(y) # decomposed the log transformed data
+plot(decomp)
+```
+
+The decomposition of log of training data displays approximately linear trend and seasonality. The period is 12, since there is similar pattern for every year. Then, we proceed to difference at lags.
+
+```{r,fig.height=10, echo=FALSE}
+
+electric.log12 <- diff(electric.log,lag=12) # difference at lag12
+electric.log112 <- diff(electric.log12,lag=1) # difference at lag12 &lag1
+par(mfrow=c(3,1))
+plot.ts(electric.log, main="log transformed data")
+fit <- lm(electric.log ~ as.numeric(1:length(electric.log))); abline(fit, col="red")
+abline(h=mean(electric.log), col="blue")
+
+plot.ts(electric.log12, main="log transformed data differenced at lag 12")
+fit <- lm(electric.log12 ~ as.numeric(1:length(electric.log12))); abline(fit, col="red")
+abline(h=mean(electric.log12), col="blue")
+
+plot.ts(electric.log112, main="log transformed data differenced at lag 12 & lag 1")
+fit <- lm(electric.log112 ~ as.numeric(1:length(electric.log112))); abline(fit, col="red")
+abline(h=mean(electric.log112), col="blue")
+
+```
+
+We first difference the log transformed data at lag12 to eliminate seasonality. The second plot shows randomness, but there is still a trend. Then, we difference the data at lag1 to eliminate the trend. Finally, the time series plot shows randomness and no trend.
+
+```{r, echo=FALSE}
+par(mfrow=c(2,2))
+hist(electric.train, col="light blue", xlab="", main="histogram: electric training data")
+hist(electric.log, col="light blue", xlab="", main="histogram: log transformed electric data")
+hist(electric.log12, col="light blue", xlab="", main="histogram: log transformed electric data,differenced at lag12")
+hist(electric.log112, col="light blue", xlab="", main="histogram: log transformed electric data differenced at lag12&lag1")
+
+```
+
+According to the histograms, the data of becomes more concentrated and normal after transformation and differencing.
+```{r, echo=FALSE}
+var(electric.train) # variance of training data
+var(electric.log)  # variance of log transformed training data
+var(electric.log12) # variance of training data
+var(electric.log112) # variance of training data
+```
+
+The variance becomes smaller after every step of transformation and differencing. We are done with the data transformation. Next, looking at the acf and pacf to find appropriate model.
+
+```{r, echo=FALSE,fig.height=8,fig.width=10}
+par(mfrow=c(2,2))
+acf(electric.log,lag.max=40)
+acf(electric.log12,lag.max=40)
+acf(electric.log112,lag.max=40)
+pacf(electric.log112,lag.max=60)
+```
+
+The plot of ACF of log transformed training data displays both seasonality and trend. After differencing at lag12, the seasonality of ACF is not apparent now. After difference at both lag12 and lag1, the ACF shows a stationary pattern. There is peak at lag12 and lag24, which indicates that Q might be 1 or 2. ACF seems to be tailing off. Then we have q=2. For plot PACF, There are peaks at seasonal lags at lag=12,24,48. Then we have P=2,4. With PACF tailing off, p might be 2 or 5. We might have MA(24) and AR(48) as well. However, they gives larger AICc.   
+The possible order:P=2,4;p=2,5;Q=1,2;q=2.  
+Using a for loop to check model AICc and find the smallest one. We noticed that when we increase the order, the AICc value decrease.
+
+```{r, echo=FALSE,results='hold'}
+# compare the AICc value 
+#for (p in c(0,5,2))
+#{for (j in c(0,2,4))
+#{ print(p);print(j);print(AICc(arima(electric.log, order=c(p,1,2), seasonal = list(order = c(j,1,2), period = 12),method = "ML")))}}
+```
+
+
+The model of $SARIMA(5,1,2)(2,1,2)_{12}$ has the lowest AICc. The confidence interval of sma2 includes zero, so I decrease Q by 1. After fixing other zero coefficients, the AICc value becomes -1244.265. However, the model is not stationary by checking the polynomial roots of ar part. Try another model with second lowest AICc: $SARIMA(2,1,2)(2,1,2)_{12}$. 
+
+```{r, echo=FALSE}
+
+m0 <- arima(electric.log, order=c(2,1,2), seasonal = list(order = c(2,1,2), period = 12),method = "ML") 
+m0 # second model tried, with second lowest AIC, with SMA2 not significant
+AICc(m0)
+AICc(arima(electric.log, order=c(2,1,2), seasonal = list(order = c(2,1,1), period = 12),method = "ML"))
+```
+
+
+```{r, echo=FALSE}
+# choose the model with lower aicc
+m1 <- arima(electric.log, order=c(2,1,2), seasonal = list(order = c(2,1,1), period = 12),fixed=c(0,NA,NA,NA,0,NA,NA),method = "ML") 
+m1 # final model
+AICc(m1)
+```
+
+
+```{r, echo=FALSE}
+polyroot(c(1,-0.3960,-0.5058)) # check invertibility
+```
+
+Model $SARIMA(2,1,2)(2,1,2)_{12}$ with the second lowest AICc(-1235.874) is then tried. The coefficient on of SMA2 has zero within its confidence interval. Therefore, I reduce the value of Q by 1. Then I have $SARIMA(2,1,2)(2,1,1)_{12}$ as my time series model. The AICc is now reduced to -1237.987. There is still zero's included in the confidence interval of coefficients at sar1, ma1 and ar1. Then I fixed these three coefficients to zero, one at a time. After I fixed the sar1 as 0, the AICc becomes -1239.762. Then I also fix the ar1 to be 0. The AICC becomes -1241.635. Now, all other coefficients are significant. The final model chosen is $SARIMA(2,1,2)(2,1,1)_{12}$. It is invertible and stationary since the polynomial roots are outside the unit circle.   
+Then we, proceed to diagnostic checking. 
+
+```{r, echo=FALSE}
+
+res <- residuals(m1) # return residuals of m1
+hist(res,density=20,breaks=20, col="blue", xlab="", prob=TRUE, main="Histogram of residuals") # histogram of residuals
+m <- mean(res)
+std <- sqrt(var(res))
+curve(dnorm(x,m,std), add=TRUE)
+```
+
+The histogram of residuals is approximately normal except that there is outlier on the left which forms a heavy tail. This is also displayed in the Q-Q plot below: most points follows the straight line, but some points on the left part deviates from the line. 
+
+```{r, echo=FALSE,fig.height=8,fig.width=10}
+par(mfrow=c(2,2))
+plot.ts(res, main="Residuals plot")
+fitt <- lm(res ~ as.numeric(1:length(res))); abline(fitt, col="red")
+abline(h=mean(res), col="blue")
+qqnorm(res,main= "Normal Q-Q Plot for Model M1")
+qqline(res,col="blue")
+acf(res, lag.max=40,main= "ACF for Model M1")
+pacf(res, lag.max=40,main= "PACF for Model M1")
+```
+
+The time series plot of residuals shows a randomness with no apparent trend and seasonality. The mean(blue) and regression line(red) looks close and approximately overlaps horizontal axis. The ACFs and PACFs of residuals are within confidence intervals so that they can be counted as zeros.
+```{r, echo=FALSE}
+shapiro.test(res) # normality test
+Box.test(res, lag = 12, type = c("Box-Pierce"), fitdf = 7) # Box-Pierce test
+Box.test(res, lag = 12, type = c("Ljung-Box"), fitdf = 7) # Box-Ljung test
+Box.test(res^2, lag = 12, type = c("Ljung-Box"), fitdf = 0) # Box-Ljung test
+acf(res^2, lag.max=40) 
+ar(res, aic = TRUE, order.max = NULL, method = c("yule-walker"))# fit to WN
+```
+
+Model M1 passes all the tests except Shapiro-Wilk normality test. This might because the heavy tail we have noticed in histogram and Q-Q plot, which means the residuals is not symmetric and non-normality of residuals. Then, we fit the model to white noise. $\sigma^2$ is small.
+
+Finally, use the model $SARIMA(2,1,2)(2,1,1)_{12}$ to predict the next 12 values. 
+Final Model for the logarithm transform of original data:
+ln(Y_t) follows $SARIMA (2,1,2)(2,1,1)_{12}$ model:
+$(1-0.2440B^2)(1+0.1773B^{24}) (1-B)(1-B^{12})ln(Y_t)=(1-0.3960B -0.5058B^2)(1-0.7301B^{12})Z_t$
+```{r, echo=FALSE,fig.height=8}
+
+par(mfrow=c(2,1))
+# prediction on log transformed data
+forecast(m1) # forecast with final model
+pred.tr <- predict(m1, n.ahead = 12)
+U.tr= pred.tr$pred + 2*pred.tr$se # CI upper bound
+L.tr= pred.tr$pred - 2*pred.tr$se # CI lower bound
+ts.plot(electric.log, xlim=c(1,length(electric.log)+12), ylim = c(min(electric.log),max(U.tr)),
+        main="Predicted data points of log transformed data") 
+lines(U.tr, col="blue", lty="dashed")
+lines(L.tr, col="blue", lty="dashed")
+points((length(electric.log)+1):(length(electric.log)+12), pred.tr$pred, col="red") # predicted points
+
+# prediction on original data
+pred.orig <- exp(pred.tr$pred)
+U= exp(U.tr)
+L= exp(L.tr)
+ts.plot(electric.train, xlim=c(1,length(electric.train)+12), ylim = c(min(electric.train),max(U)),
+        main="Predicted data points of original data")
+lines(U, col="blue", lty="dashed")
+lines(L, col="blue", lty="dashed")
+points((length(electric.train)+1):(length(electric.train)+12), pred.orig, col="red")
+
+```
+```{r, echo=FALSE,fig.height=8}
+
+par(mfrow=c(2,1))
+ts.plot(electric.train, xlim = c(200,length(electric.train)+12), ylim = c(70,max(U)),
+        main="Predicted data points of original data(zoomed)")
+lines(U, col="blue", lty="dashed") # CI
+lines(L, col="blue", lty="dashed") # CI
+points((length(electric.train)+1):(length(electric.train)+12), pred.orig, col="red")
+
+
+len_data <- length(c(electric.train,electric.test))
+
+ts.plot(c(electric.train,electric.test), xlim = c(200,length(electric.train)+12), ylim = c(70,max(U)), col="red",main="Predicted data points of original data, with test data(zoomed)") # original data
+lines(U, col="blue", lty="dashed")
+lines(L, col="blue", lty="dashed")
+
+points((length(electric.train)+1):(length(electric.train)+12), pred.orig, col="black") # predicted data points
+```
+
+The test data corresponding to red line is within the confidence interval with some parts very close to the lower boundary. Also, it is noticeable that the confidence internal is relatively narrow. This two features of forecast reflect the influence of heavy tail on the lower part of histogram of residuals and deviation in Q-Q plot. This might also consistent with the small p-value for the Shapiro-Wilk test--the residuals are not symmetric or normal.
+
+## Conclusion
+The data of electric production index has a periodic pattern. There are two peaks within each year. The production index increase over time with fluctuations. 
+The model we fit to the data set is $SARIMA (2,1,2)(2,1,1)_{12}$. 
+Specifically, let $Y_t$ be the original data. $ln(Y_t)$ follows 
+$(1-0.2440B^2)(1+0.1773B^{24}) (1-B)(1-B^{12})ln(Y_t)=(1-0.3960B -0.5058B^2)(1-0.7301B^{12})Z_t$. This model performs relatively well but have defects in predicted confidence interval. Primary goal for this project is achieved: the predicted data follows the previous pattern; the predicted values are close to the test data. The standard error is small, which results in a narrow confidence interval. In addition, the test data set is within the confidence interval, but a small part is close to and almost overlaps the lower bound. This feature is consistent with the deviation of the Q-Q plot and long tail in the histogram of residuals, since the residuals do not pass the normality test, which might result in slightly asymmetric of upper and lower bound of forecast confidence interval relative to test data. Overall, the model finally chosen gives satisfactory prediction.
+
+## Acknowledgements
+The author gratefully acknowledge the assistance of professor Raisa Feldman for valuable insights of model building as well as teaching assistant Sunpeng Duan for practical suggestion on the content of report. 
+
+
+## Reference
+Board of Governors of the Federal Reserve System (US), Industrial Production: Total Index [INDPRO], retrieved from FRED, Federal Reserve Bank of St. Louis; https://fred.stlouisfed.org/series/INDPRO, March 11, 2022.
+
+Board of Governors of the Federal Reserve System (US), Industrial Production: Utilities: Electric and Gas Utilities (NAICS = 2211,2) [IPG2211A2N], retrieved from FRED, Federal Reserve Bank of St. Louis; https://fred.stlouisfed.org/series/IPG2211A2N, March 9, 2022.
+
+Jagadish, Kandi. “Time Series Analysis.” Kaggle, 21 Apr. 2019, https://www.kaggle.com/kandij/electric-production. 
+
+
+\newpage
+## Code appendix
+
+```{r appendix, ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+```
