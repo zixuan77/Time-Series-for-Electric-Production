@@ -11,6 +11,6 @@ This project includes the process of time series analysis which includes data tr
 and log transformation, model identification with acf and pacf plot, diagnostic checking with the analysis
 of residuals and forecast. The plot of original data displays evident periodic pattern. Therefore, SARIMA
 model is used to fit this electric production data set. Let the $Y_t$ be the training data. $ln(Y_t)$ follows
-$SARIMA(2,1,2)(2,1,1)_12$ model:$(1 + 0.2440B^2 )(1 − 0.1771B^{24} )(1 − B)(1 − B^{12})ln(Y_t ) = (1 − 0.3960B −
-0.5058B^2 )(1−0.7301B^12 )Z_t $. The predicted data are close to the real(testing) data line, which indicates that
+$SARIMA(2,1,2)(2,1,1)_{12} $ model:$ (1 + 0.2440B^2 )(1 − 0.1771B^{24} )(1 − B)(1 − B^{12})ln(Y_t) = (1 − 0.3960B −
+0.5058B^2 )(1−0.7301B^12)Z_t $. The predicted data are close to the real(testing) data line, which indicates that
 the model we choose fits well to the original data, but with little defect for the predicted confidence interval.
